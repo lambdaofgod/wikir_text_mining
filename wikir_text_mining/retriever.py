@@ -21,8 +21,9 @@ class Retriever:
     def _retrieve_bm25(self, query: List[str], k=100):
         scores = self.bm25.get_scores(query)
         sorted_indices = np.argsort(scores)[::-1][:k]
+        document_indices = self.documents_df.index[sorted_indices]
         sorted_scores = scores[sorted_indices]
-        results_df = self.documents_df.loc[sorted_indices]
+        results_df = self.documents_df.loc[document_indices]
         results_df['score'] = sorted_scores
         return results_df
 
@@ -61,11 +62,7 @@ class ClassifierRetriever(Retriever):
             pseudo_relevant_df['relevance_score'],
             alpha=self.alpha
         )
-        sorted_indices = np.argsort(pseudo_relevant_df['score'])[::-1][:k]
-        sorted_scores = clf_scores[sorted_indices]
-        results_df = pseudo_relevant_df.iloc[sorted_indices]
-        results_df['score'] = sorted_scores
-        return results_df
+        return pseudo_relevant_df.sort_values(by='score')
 
     def fit_vectorizer(self, texts):
         self.vectorizer.fit(texts)

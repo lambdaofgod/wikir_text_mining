@@ -45,13 +45,13 @@ def get_evaluation_df(predicted_relevance, evaluator):
 
 def make_score_dict(results_df, score_col='score_bm25'):
     return {
-        str(idx): row[score_col]
-        for idx, row in results_df.iterrows()
+        str(row.name): row[score_col]
+        for _, row in results_df.iterrows()
     }
 
 
-def evaluate_query(query_id, query_text, retriever, evaluator, score_col='score', **retriever_kwargs):
-    results_df = retriever.retrieve(query_text.split())
+def evaluate_query(query_id, query, retriever, evaluator, score_col='score', **retriever_kwargs):
+    results_df = retriever.retrieve(query)
     results_dict = {str(query_id): make_score_dict(results_df, score_col=score_col)}
     evaluation_df = get_evaluation_df(results_dict, evaluator)
     return evaluation_df
