@@ -7,6 +7,10 @@ import attr
 from sklearn import base
 import pandas as pd
 from wikir_text_mining import vectorizer
+from warnings import simplefilter
+
+
+simplefilter(action='ignore', category=FutureWarning)
 
 
 class Retriever:
@@ -45,10 +49,40 @@ class ClassifierRetriever(Retriever):
     )
     top_used = attr.ib(default=30)
     bottom_used = attr.ib(default=30)
+    alpha = attr.ib(default=0.5)
 
-    def retrieval_results(self, query, k=100):
+    def retrieve(self, query, k=100):
         pseudo_relevant_df = self._retrieve_bm25(query, k)
-        pseudo_relevant_texts = pseudo_relevant_df['text']
+        clf_scores = self._get_classifier_scores(pseudo_relevant_df)
+        pseudo_relevant_df['classification_score'] = clf_scores
+        pseudo_relevant_df['relevance_score'] = pseudo_relevant_df['score']
+        pseudo_relevant_df['score'] = self.interpolate(
+            pseudo_relevant_df['classification_score'],
+            pseudo_relevant_df['relevance_score'],
+            alpha=self.alpha
+        )
+        sorted_indices = np.argsort(pseudo_relevant_df['score'])[::-1][:k]
+        sorted_scores = clf_scores[sorted_indices]
+        results_df = pseudo_relevant_df.iloc[sorted_indices]
+        results_df['score'] = sorted_scores
+        return results_df
+
+    def fit_vectorizer(self, texts):
+        self.vectorizer.fit(texts)
+
+    @classmethod
+    def interpolate(cls, old_score, new_score, alpha=0.5):
+        s_min, s_max = min(old_score), max(old_score)
+        old_score = (old_score - s_min) / (s_max - s_min)
+
+        s_min, s_max = min(new_score), max(new_score)
+        new_score = (new_score - s_min) / (s_max - s_min)
+
+        score = old_score * (1 - alpha) + new_score * alpha
+        return score
+
+    def _get_classifier_scores(self, pseudo_relevant_df, text_col='text'):
+        pseudo_relevant_texts = pseudo_relevant_df[text_col]
         pseudo_relevant_features = self.vectorizer.transform(pseudo_relevant_texts)
         positive_features = pseudo_relevant_features[:self.top_used]
         negative_features = pseudo_relevant_features[-self.bottom_used:]
@@ -56,13 +90,4 @@ class ClassifierRetriever(Retriever):
         y_train = np.ones(X_train.shape[0])
         y_train[self.top_used:] = 0
         self.clf.fit(X_train, y_train)
-        print(self.clf.score(X_train, y_train))
-        clf_scores = self.clf.predict_proba(pseudo_relevant_features)[:,1]
-        sorted_indices = np.argsort(clf_scores)[::-1][:k]
-        sorted_scores = clf_scores[sorted_indices]
-        results_df = pseudo_relevant_df.iloc[sorted_indices]
-        results_df['score'] = sorted_scores
-        return results_df, pseudo_relevant_df
-
-    def fit_vectorizer(self, texts):
-        self.vectorizer.fit(texts)
+        return self.clf.predict_proba(pseudo_relevant_features)[:,1]
