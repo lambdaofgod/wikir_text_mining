@@ -12,3 +12,4 @@ toolz
 funcy
 httpimport
 sklearn
+attrs

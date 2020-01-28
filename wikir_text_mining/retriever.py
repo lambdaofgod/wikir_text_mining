@@ -40,6 +40,17 @@ class BM25Retriever(Retriever):
 
 @attr.s
 class ClassifierRetriever(Retriever):
+    """
+    Uses classification of top and bottom documents from relevance list for reranking
+    Idea from "The Simplest Thing That Can Possibly Work:Pseudo-Relevance Feedback Using Text Classification"
+
+    Parameters:
+        bm25: rank_bm25 model for relevance ranking
+        documents_df: documents for retrieval
+        vectorizer: transformer used for feature extraction for classifier, see wikir_text_mining.vectorizer
+        clf: sklearn-compatible classifier
+    """
+
     bm25: rank_bm25.BM25 = attr.ib()
     documents_df: pd.DataFrame = attr.ib()
     vectorizer: base.TransformerMixin = attr.ib(
@@ -62,7 +73,7 @@ class ClassifierRetriever(Retriever):
             pseudo_relevant_df['relevance_score'],
             alpha=self.alpha
         )
-        return pseudo_relevant_df.sort_values(by='score')
+        return pseudo_relevant_df.sort_values(by='score', ascending=False)
 
     def fit_vectorizer(self, texts):
         self.vectorizer.fit(texts)
@@ -83,8 +94,17 @@ class ClassifierRetriever(Retriever):
         pseudo_relevant_features = self.vectorizer.transform(pseudo_relevant_texts)
         positive_features = pseudo_relevant_features[:self.top_used]
         negative_features = pseudo_relevant_features[-self.bottom_used:]
-        X_train = scipy.sparse.vstack([positive_features, negative_features])
+        X_train = self._generic_vstack(positive_features, negative_features)
         y_train = np.ones(X_train.shape[0])
         y_train[self.top_used:] = 0
         self.clf.fit(X_train, y_train)
         return self.clf.predict_proba(pseudo_relevant_features)[:,1]
+
+    @classmethod
+    def _generic_vstack(cls, m1, m2):
+        if type(m1) == np.ndarray:
+            return np.vstack([m1, m2])
+        elif type(m1) == scipy.sparse.csr.csr_matrix:
+            return scipy.sparse.vstack([m1, m2])
+        else:
+            raise ValueError('Can only stack ndarrays or sparse matrices')

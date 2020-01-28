@@ -5,6 +5,8 @@ import scipy.sparse as sp
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_is_fitted
 from sklearn.feature_extraction.text import _document_frequency, CountVectorizer
+import tqdm
+import funcy
 
 
 class BM25Transformer(BaseEstimator, TransformerMixin):
@@ -118,3 +120,29 @@ class BM25Vectorizer(BaseEstimator, TransformerMixin):
     def transform(self, X, copy=True):
         document_term_matrix = self.count_vectorizer.transform(X)
         return self.bm25_transformer.transform(document_term_matrix, copy=copy)
+
+
+class SelfAttentionVectorizer(BaseEstimator, TransformerMixin):
+
+    def __init__(self, feature_pipeline):
+        self.feature_pipeline = feature_pipeline
+
+    def fit(self, X):
+        return self
+
+    def transform(self, X):
+        return self._get_features(X)
+
+    def _get_features(self, texts, max_min_features=False, chunk_size=10, verbose=False):
+        text_features = []
+        _iter = funcy.chunks(chunk_size, texts)
+        if verbose:
+            _iter = tqdm.tqdm(_iter, total=int(np.ceil(len(texts) / chunk_size)))
+        for t in _iter:
+            features = np.array(self.feature_pipeline.transform(t))
+            feature_types = [features.mean(axis=1)]
+            if max_min_features:
+                feature_types = feature_types + [features.max(axis=1), features.min(axis=1)]
+            concat_features = np.hstack(feature_types)
+            text_features.append(concat_features)
+        return np.vstack(text_features)
