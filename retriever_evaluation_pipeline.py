@@ -6,7 +6,7 @@ from wikir_text_mining import evaluation
 
 retriever_type = 'word2vec_classifier_retriever'
 subset = 'training'
-retriever = config.PREDEFINED_RETRIEVERS[retriever_type]
+retriever = config.predefined_retrievers(retriever_type)
 
 
 queries_df = pd.read_csv('wikIR1k/{}/queries.csv'.format(subset), index_col='id_left')
