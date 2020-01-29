@@ -2,7 +2,7 @@ import pickle
 
 import pandas as pd
 from mlutil import embeddings
-from sklearn import linear_model
+from sklearn import linear_model, naive_bayes, feature_extraction
 
 from wikir_text_mining import retriever
 from wikir_text_mining import vectorizer
@@ -28,6 +28,16 @@ def predefined_retrievers(retriever_type, classifier_retriever_alpha=0.5):
             documents_df=documents_df,
             vectorizer=vectorizer.BM25Vectorizer(),
             clf=linear_model.LogisticRegression(penalty='l1', solver='liblinear'),
+            alpha=classifier_retriever_alpha
+        )
+        clasifier_retriever.vectorizer.fit(documents_df['text'])
+        return clasifier_retriever
+    elif retriever_type == 'naive_bayes_classifier_retriever':
+        clasifier_retriever = retriever.ClassifierRetriever(
+            bm25=relevance_model,
+            documents_df=documents_df,
+            vectorizer=feature_extraction.text.CountVectorizer(),
+            clf=naive_bayes.MultinomialNB(),
             alpha=classifier_retriever_alpha
         )
         clasifier_retriever.vectorizer.fit(documents_df['text'])

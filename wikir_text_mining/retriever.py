@@ -4,7 +4,7 @@ import rank_bm25
 import numpy as np
 from typing import List
 import attr
-from sklearn import base
+from sklearn import base, decomposition, feature_extraction, pipeline, metrics
 import pandas as pd
 from wikir_text_mining import vectorizer
 from warnings import simplefilter
@@ -26,6 +26,18 @@ class Retriever:
         results_df = self.documents_df.loc[document_indices]
         results_df['score'] = sorted_scores
         return results_df
+
+    @classmethod
+    def interpolate(cls, old_score, new_score, alpha=0.5):
+        s_min, s_max = min(old_score), max(old_score)
+        old_score = (old_score - s_min) / (s_max - s_min)
+
+        s_min, s_max = min(new_score), max(new_score)
+        new_score = (new_score - s_min) / (s_max - s_min)
+
+        score = old_score * (1 - alpha) + new_score * alpha
+        return score
+
 
 
 @attr.s
@@ -108,3 +120,4 @@ class ClassifierRetriever(Retriever):
             return scipy.sparse.vstack([m1, m2])
         else:
             raise ValueError('Can only stack ndarrays or sparse matrices')
+
