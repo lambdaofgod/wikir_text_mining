@@ -6,7 +6,7 @@ from typing import List
 import attr
 from sklearn import base, decomposition, feature_extraction, pipeline, metrics
 import pandas as pd
-from wikir_text_mining import vectorizer
+from wikir_text_mining import vectorizers
 from warnings import simplefilter
 
 
@@ -66,7 +66,7 @@ class ClassifierRetriever(Retriever):
     bm25: rank_bm25.BM25 = attr.ib()
     documents_df: pd.DataFrame = attr.ib()
     vectorizer: base.TransformerMixin = attr.ib(
-        default=vectorizer.BM25Vectorizer()
+        default=vectorizers.BM25Vectorizer()
     )
     clf: base.ClassifierMixin = attr.ib(
         default=linear_model.LogisticRegression(penalty='l1', solver='liblinear')
@@ -121,3 +121,40 @@ class ClassifierRetriever(Retriever):
         else:
             raise ValueError('Can only stack ndarrays or sparse matrices')
 
+
+class TopicModelRetriever(Retriever):
+
+    def __init__(self,
+                 bm25,
+                 documents_df,
+                 vectorizer=vectorizers.BM25Vectorizer(),
+                 topic_modeler=decomposition.NMF(n_components=50),
+                 text_col='text',
+                 alpha=0.5):
+        self.bm25 = bm25
+        self.documents_df = documents_df
+        self._text_col = text_col
+        self.feature_extractor = self._initialize_feature_extractor(vectorizer, topic_modeler, documents_df[text_col])
+        self.alpha = alpha
+
+    def retrieve(self, query, k=100):
+        pseudo_relevant_df = self._retrieve_bm25(query, k)
+
+        similarities = self.calculate_similarity(query, pseudo_relevant_df)
+        pseudo_relevant_df['similarity_score'] = similarities
+        pseudo_relevant_df['relevance_score'] = pseudo_relevant_df['score']
+        pseudo_relevant_df['score'] = self.interpolate(
+            pseudo_relevant_df['similarity_score'],
+            pseudo_relevant_df['relevance_score'],
+            alpha=self.alpha
+        )
+        return pseudo_relevant_df.sort_values(by='score', ascending=False)
+
+    def _initialize_feature_extractor(self, vectorizer, topic_modeler, documents):
+        feature_extractor = pipeline.make_pipeline(vectorizer, topic_modeler)
+        return feature_extractor.fit(documents)
+
+    def calculate_similarity(self, query, pseudo_relevant_df):
+        query_features = self.feature_extractor.transform([query])
+        topic_features = self.feature_extractor.transform(pseudo_relevant_df[self._text_col])
+        return metrics.pairwise.cosine_similarity(query_features, topic_features).reshape(-1)
