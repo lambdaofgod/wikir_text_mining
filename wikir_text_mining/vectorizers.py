@@ -108,9 +108,10 @@ class BM25Vectorizer(BaseEstimator, TransformerMixin):
     http://nlp.stanford.edu/IR-book/html/htmledition/okapi-bm25-a-non-binary-model-1.html
     """
 
-    def __init__(self, use_idf=True, k1=2.0, b=0.75):
+    def __init__(self, use_idf=True, k1=2.0, b=0.75, nonnegative=False):
         self.count_vectorizer = CountVectorizer()
         self.bm25_transformer = BM25Transformer(use_idf, k1, b)
+        self.nonnegative = nonnegative
 
     def fit(self, X):
         document_term_matrix = self.count_vectorizer.fit_transform(X)
@@ -119,7 +120,10 @@ class BM25Vectorizer(BaseEstimator, TransformerMixin):
 
     def transform(self, X, copy=True):
         document_term_matrix = self.count_vectorizer.transform(X)
-        return self.bm25_transformer.transform(document_term_matrix, copy=copy)
+        bm25_matrix = self.bm25_transformer.transform(document_term_matrix, copy=copy)
+        if self.nonnegative:
+            bm25_matrix[bm25_matrix < 0] = 0
+        return bm25_matrix
 
 
 class SelfAttentionVectorizer(BaseEstimator, TransformerMixin):

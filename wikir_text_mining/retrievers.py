@@ -39,7 +39,6 @@ class Retriever:
         return score
 
 
-
 @attr.s
 class BM25Retriever(Retriever):
 
@@ -75,7 +74,7 @@ class ClassifierRetriever(Retriever):
     bottom_used = attr.ib(default=30)
     alpha = attr.ib(default=0.5)
 
-    def retrieve(self, query, k=100):
+    def retrieve(self, query, k=100, alpha=None):
         pseudo_relevant_df = self._retrieve_bm25(query, k)
         clf_scores = self._get_classifier_scores(pseudo_relevant_df)
         pseudo_relevant_df['classification_score'] = clf_scores
@@ -83,7 +82,7 @@ class ClassifierRetriever(Retriever):
         pseudo_relevant_df['score'] = self.interpolate(
             pseudo_relevant_df['classification_score'],
             pseudo_relevant_df['relevance_score'],
-            alpha=self.alpha
+            alpha=self.alpha if alpha is None else alpha
         )
         return pseudo_relevant_df.sort_values(by='score', ascending=False)
 
@@ -125,36 +124,51 @@ class ClassifierRetriever(Retriever):
 class TopicModelRetriever(Retriever):
 
     def __init__(self,
-                 bm25,
-                 documents_df,
-                 vectorizer=vectorizers.BM25Vectorizer(),
-                 topic_modeler=decomposition.NMF(n_components=50),
-                 text_col='text',
-                 alpha=0.5):
+             bm25,
+             documents_df,
+             vectorizer=vectorizers.BM25Vectorizer(nonnegative=True),
+             topic_modeler=decomposition.NMF(n_components=10, max_iter=100, random_state=0),
+             text_col='text',
+             alpha=0.5,
+             fit_transformers=True,
+             features=None):
         self.bm25 = bm25
         self.documents_df = documents_df
         self._text_col = text_col
-        self.feature_extractor = self._initialize_feature_extractor(vectorizer, topic_modeler, documents_df[text_col])
+        self.feature_extractor = self._initialize_feature_extractor(
+            vectorizer,
+            topic_modeler,
+            documents_df[text_col],
+            fit_transformers)
+        if features is None:
+            self.features = self.feature_extractor.fit_transform(documents_df[text_col])
+        else:
+            self.features = features
         self.alpha = alpha
 
-    def retrieve(self, query, k=100):
+    def retrieve(self, query, k=100, alpha=None):
         pseudo_relevant_df = self._retrieve_bm25(query, k)
-
-        similarities = self.calculate_similarity(query, pseudo_relevant_df)
+        reindexer = pd.DataFrame({'index': pd.RangeIndex(self.documents_df.shape[0])}, index=self.documents_df.index)
+        indices = reindexer.loc[pseudo_relevant_df.index]['index']
+        similarities = self.calculate_similarity(query, self.features[indices.values])
         pseudo_relevant_df['similarity_score'] = similarities
         pseudo_relevant_df['relevance_score'] = pseudo_relevant_df['score']
         pseudo_relevant_df['score'] = self.interpolate(
             pseudo_relevant_df['similarity_score'],
             pseudo_relevant_df['relevance_score'],
-            alpha=self.alpha
+            alpha=self.alpha if alpha is None else alpha
         )
         return pseudo_relevant_df.sort_values(by='score', ascending=False)
 
-    def _initialize_feature_extractor(self, vectorizer, topic_modeler, documents):
+    def _initialize_feature_extractor(self, vectorizer, topic_modeler, documents, fit_transformers):
         feature_extractor = pipeline.make_pipeline(vectorizer, topic_modeler)
-        return feature_extractor.fit(documents)
+        if fit_transformers:
+            return feature_extractor.fit(documents)
+        else:
+            return feature_extractor
 
-    def calculate_similarity(self, query, pseudo_relevant_df):
-        query_features = self.feature_extractor.transform([query])
-        topic_features = self.feature_extractor.transform(pseudo_relevant_df[self._text_col])
-        return metrics.pairwise.cosine_similarity(query_features, topic_features).reshape(-1)
+    def calculate_similarity(self, query, pseudo_relevant_features, method='cosine'):
+        assert method in ['cosine']
+        query_features = self.feature_extractor.transform([' '.join(query)])
+        if method == 'cosine':
+            return metrics.pairwise.cosine_similarity(query_features, pseudo_relevant_features).reshape(-1)
