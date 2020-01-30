@@ -13,3 +13,4 @@ funcy
 httpimport
 sklearn
 attrs
+git+https://github.com/lambdaofgod/mlutil/

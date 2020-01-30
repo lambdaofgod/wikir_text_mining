@@ -6,6 +6,9 @@ retriever_evaluation_pipeline:
     - file: artifacts/bm25.pkl
       name: bm25
       path: artifacts 
+    - file: artifacts/topic_model_retriever.pkl
+      name: topic_model_retriever
+      path: artifacts 
     - file: wikIR1k/documents.csv
       path: wikIR1k 
       name: documents
