@@ -1,5 +1,14 @@
 import pandas as pd
+from nltk import stem
 import nltk
+
+
+stop_words = set(nltk.corpus.stopwords.words('english'))
+
+
+def stem_text(doc, stemmer=stem.PorterStemmer()):
+    stems = [stemmer.stem(elem) for elem in doc.split(" ") if elem not in stop_words]
+    return ' '.join(stems)
 
 
 stemmer = nltk.stem.PorterStemmer()
