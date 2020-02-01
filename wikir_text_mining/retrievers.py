@@ -7,9 +7,11 @@ import attr
 from sklearn import base, decomposition, feature_extraction, pipeline, metrics
 import pandas as pd
 from sklearn.base import TransformerMixin
-
+from operator import itemgetter
+import itertools
 from wikir_text_mining import vectorizers
 from warnings import simplefilter
+import mlutil
 
 
 simplefilter(action='ignore', category=FutureWarning)
@@ -181,7 +183,7 @@ class TopicModelRetriever(Retriever):
 class QueryExpanderRetriever(Retriever):
 
     def retrieve(self, query, k=100, alpha=None):
-        expanded_query = self.expand_query(query)
+        expanded_query = query + self.expand_query(query)
         return self._retrieve_bm25(expanded_query, k)
 
 
@@ -190,10 +192,19 @@ class WordEmbeddingQueryExpander(QueryExpanderRetriever):
 
     bm25: rank_bm25.BM25 = attr.ib()
     documents_df: pd.DataFrame = attr.ib()
-    embedder: TransformerMixin = attr.ib()
+    embedder: mlutil.embeddings.EmbeddingVectorizer = attr.ib()
     n_expanded_words = attr.ib(default=10)
     text_col = attr.ib(default='text')
 
-    def expand_query(self, query):
-        query
-
+    def expand_query(self, query, n_words=None):
+        n_words = self.n_expanded_words if n_words is None else n_words
+        vocab = self.embedder.word_embeddings.vocab.keys()
+        similar_words_with_scores = list(
+            itertools.chain.from_iterable(
+                self.embedder.word_embeddings.most_similar_cosmul([word]) for word in query
+                if word in vocab
+            )
+        )
+        similar_words_by_closeness = sorted(similar_words_with_scores, key=itemgetter(1))
+        similar_words = [w for w, __ in similar_words_by_closeness if w not in query]
+        return similar_words[:n_words]
