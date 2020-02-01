@@ -6,6 +6,8 @@ from typing import List
 import attr
 from sklearn import base, decomposition, feature_extraction, pipeline, metrics
 import pandas as pd
+from sklearn.base import TransformerMixin
+
 from wikir_text_mining import vectorizers
 from warnings import simplefilter
 
@@ -73,6 +75,7 @@ class ClassifierRetriever(Retriever):
     top_used = attr.ib(default=30)
     bottom_used = attr.ib(default=30)
     alpha = attr.ib(default=0.5)
+    text_col = attr.ib(default='text')
 
     def retrieve(self, query, k=100, alpha=None):
         pseudo_relevant_df = self._retrieve_bm25(query, k)
@@ -80,8 +83,8 @@ class ClassifierRetriever(Retriever):
         pseudo_relevant_df['classification_score'] = clf_scores
         pseudo_relevant_df['relevance_score'] = pseudo_relevant_df['score']
         pseudo_relevant_df['score'] = self.interpolate(
-            pseudo_relevant_df['classification_score'],
             pseudo_relevant_df['relevance_score'],
+            pseudo_relevant_df['classification_score'],
             alpha=self.alpha if alpha is None else alpha
         )
         return pseudo_relevant_df.sort_values(by='score', ascending=False)
@@ -97,11 +100,11 @@ class ClassifierRetriever(Retriever):
         s_min, s_max = min(new_score), max(new_score)
         new_score = (new_score - s_min) / (s_max - s_min)
 
-        score = old_score * (1 - alpha) + new_score * alpha
+        score =  new_score * alpha + old_score * (1 - alpha)
         return score
 
-    def _get_classifier_scores(self, pseudo_relevant_df, text_col='text'):
-        pseudo_relevant_texts = pseudo_relevant_df[text_col]
+    def _get_classifier_scores(self, pseudo_relevant_df):
+        pseudo_relevant_texts = pseudo_relevant_df[self.text_col]
         pseudo_relevant_features = self.vectorizer.transform(pseudo_relevant_texts)
         positive_features = pseudo_relevant_features[:self.top_used]
         negative_features = pseudo_relevant_features[-self.bottom_used:]
@@ -109,7 +112,7 @@ class ClassifierRetriever(Retriever):
         y_train = np.ones(X_train.shape[0])
         y_train[self.top_used:] = 0
         self.clf.fit(X_train, y_train)
-        return self.clf.predict_proba(pseudo_relevant_features)[:,1]
+        return self.clf.predict_proba(pseudo_relevant_features)[:, 1]
 
     @classmethod
     def _generic_vstack(cls, m1, m2):
@@ -154,8 +157,8 @@ class TopicModelRetriever(Retriever):
         pseudo_relevant_df['similarity_score'] = similarities
         pseudo_relevant_df['relevance_score'] = pseudo_relevant_df['score']
         pseudo_relevant_df['score'] = self.interpolate(
-            pseudo_relevant_df['similarity_score'],
             pseudo_relevant_df['relevance_score'],
+            pseudo_relevant_df['similarity_score'],
             alpha=self.alpha if alpha is None else alpha
         )
         return pseudo_relevant_df.sort_values(by='score', ascending=False)
@@ -172,3 +175,25 @@ class TopicModelRetriever(Retriever):
         query_features = self.feature_extractor.transform([' '.join(query)])
         if method == 'cosine':
             return metrics.pairwise.cosine_similarity(query_features, pseudo_relevant_features).reshape(-1)
+
+
+@attr.s
+class QueryExpanderRetriever(Retriever):
+
+    def retrieve(self, query, k=100, alpha=None):
+        expanded_query = self.expand_query(query)
+        return self._retrieve_bm25(expanded_query, k)
+
+
+@attr.s
+class WordEmbeddingQueryExpander(QueryExpanderRetriever):
+
+    bm25: rank_bm25.BM25 = attr.ib()
+    documents_df: pd.DataFrame = attr.ib()
+    embedder: TransformerMixin = attr.ib()
+    n_expanded_words = attr.ib(default=10)
+    text_col = attr.ib(default='text')
+
+    def expand_query(self, query):
+        query
+
