@@ -9,10 +9,18 @@ from wikir_text_mining import evaluation
 retriever_type = 'topic_model_retriever'
 subset = 'training'
 alpha = 0.5
+text_col = 'text'
+vectorizer = 'bm25'
+word_embedding_model = 'glove-wiki-gigaword-50'
 
 
 # setup
-retriever = config.predefined_retrievers(retriever_type, alpha)
+retriever = config.predefined_retrievers(
+    retriever_type,
+    text_col=text_col,
+    alpha=alpha,
+    vectorizer=vectorizer,
+    word_embedding_model=word_embedding_model)
 queries_df = pd.read_csv('wikIR1k/{}/queries.csv'.format(subset), index_col='id_left')
 qrel_path = 'wikIR1k/{}/qrels'.format(subset)
 evaluator = evaluation.setup_evaluator_from_relevance_file(qrel_path)
