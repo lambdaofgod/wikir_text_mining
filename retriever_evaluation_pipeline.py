@@ -17,6 +17,8 @@ word_embedding_model = 'glove-wiki-gigaword-50'
 word_embedding_classifier = 'linear'
 stem_query = True
 query_expander_n_expanded_words = 10
+topic_modeler_n_components = 50
+classification_scored_documents = 30
 
 
 # setup
@@ -27,7 +29,8 @@ retriever = config.predefined_retrievers(
     vectorizer=vectorizer,
     word_embedding_model=word_embedding_model,
     query_expander_n_expanded_words=query_expander_n_expanded_words,
-    word_embedding_classifier=word_embedding_classifier
+    word_embedding_classifier=word_embedding_classifier,
+    classification_scored_documents=classification_scored_documents
 )
 queries_df = pd.read_csv('wikIR1k/{}/queries.csv'.format(subset), index_col='id_left')
 qrel_path = 'wikIR1k/{}/qrels'.format(subset)

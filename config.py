@@ -20,7 +20,8 @@ def predefined_retrievers(
         word_embedding_model='glove-wiki-gigaword-50',
         query_expander_n_expanded_words=10,
         topic_modeler_n_components=50,
-        word_embedding_classifier='linear'
+        word_embedding_classifier='linear',
+        classification_scored_documents=30
     ):
     assert vectorizer in ['bm25', 'tfidf']
     if retriever_type == 'word_embedding_classifier_retriever':
@@ -31,6 +32,8 @@ def predefined_retrievers(
             clf = neighbors.KNeighborsClassifier(n_neighbors=1, metric='cosine')
         return retrievers.ClassifierRetriever(
             bm25=relevance_model,
+            top_used=classification_scored_documents,
+            bottom_used=classification_scored_documents,
             documents_df=documents_df,
             vectorizer=word_embedding_vectorizer,
             clf=clf,
@@ -44,6 +47,8 @@ def predefined_retrievers(
             vectorizer = feature_extraction.text.TfidfVectorizer()
         clasifier_retriever = retrievers.ClassifierRetriever(
             bm25=relevance_model,
+            top_used=classification_scored_documents,
+            bottom_used=classification_scored_documents,
             documents_df=documents_df,
             vectorizer=vectorizer,
             clf=linear_model.LogisticRegression(penalty='l1', solver='liblinear'),
@@ -56,6 +61,8 @@ def predefined_retrievers(
         clasifier_retriever = retrievers.ClassifierRetriever(
             bm25=relevance_model,
             documents_df=documents_df,
+            top_used=classification_scored_documents,
+            bottom_used=classification_scored_documents,
             vectorizer=feature_extraction.text.CountVectorizer(),
             clf=naive_bayes.MultinomialNB(),
             alpha=alpha,
