@@ -2,7 +2,7 @@ import pickle
 
 import pandas as pd
 from mlutil import embeddings
-from sklearn import linear_model, naive_bayes, feature_extraction, decomposition
+from sklearn import linear_model, naive_bayes, feature_extraction, decomposition, neighbors
 
 from wikir_text_mining import retrievers
 from wikir_text_mining import vectorizers
@@ -19,16 +19,21 @@ def predefined_retrievers(
         vectorizer='bm25',
         word_embedding_model='glove-wiki-gigaword-50',
         query_expander_n_expanded_words=10,
-        topic_modeler_n_components=50
+        topic_modeler_n_components=50,
+        word_embedding_classifier='linear'
     ):
     assert vectorizer in ['bm25', 'tfidf']
     if retriever_type == 'word_embedding_classifier_retriever':
         word_embedding_vectorizer = embeddings.AverageWordEmbeddingsVectorizer.from_gensim_embedding_model(word_embedding_model)
+        if word_embedding_classifier == 'linear':
+            clf = linear_model.LogisticRegression(solver='lbfgs')
+        elif word_embedding_classifier == 'knn':
+            clf = neighbors.KNeighborsClassifier(n_neighbors=1, metric='cosine')
         return retrievers.ClassifierRetriever(
             bm25=relevance_model,
             documents_df=documents_df,
             vectorizer=word_embedding_vectorizer,
-            clf=linear_model.LogisticRegression(solver='lbfgs'),
+            clf=clf,
             alpha=alpha,
             text_col=text_col
         )

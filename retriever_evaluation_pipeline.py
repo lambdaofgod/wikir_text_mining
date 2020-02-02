@@ -14,7 +14,8 @@ alpha = 0.5
 text_col = 'text'
 vectorizer = 'bm25'
 word_embedding_model = 'glove-wiki-gigaword-50'
-stem_query = False
+word_embedding_classifier = 'linear'
+stem_query = True
 query_expander_n_expanded_words = 10
 
 
@@ -25,7 +26,8 @@ retriever = config.predefined_retrievers(
     alpha=alpha,
     vectorizer=vectorizer,
     word_embedding_model=word_embedding_model,
-    query_expander_n_expanded_words=query_expander_n_expanded_words
+    query_expander_n_expanded_words=query_expander_n_expanded_words,
+    word_embedding_classifier=word_embedding_classifier
 )
 queries_df = pd.read_csv('wikIR1k/{}/queries.csv'.format(subset), index_col='id_left')
 qrel_path = 'wikIR1k/{}/qrels'.format(subset)
