@@ -15,6 +15,7 @@
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{csvsimple}
+\usepackage{multirow}
 
 \begin{document}
 
@@ -32,20 +33,21 @@ The dataset consists of approx. 100k documents and queries split into training, 
 
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=1.1]{images/training_query_length.png}
+\includegraphics[scale=0.7]{images/training_query_length.png}
 \label{fig:universe}
 \end{figure}
 
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=1.1]{images/validation_query_length.png}
+\includegraphics[scale=0.7]{images/validation_query_length.png}
 \label{fig:universe}
 \end{figure}
 
 \begin{figure}[h!]
 \centering
-\includegraphics[scale=1.1]{images/test_query_length.png}
+\includegraphics[scale=0.7]{images/test_query_length.png}
 \label{fig:universe}
+\caption{Query lengths (in words) histograms}
 \end{figure}
 
 \section{Evaluation}
@@ -60,38 +62,65 @@ For our models we preprocess data according to original paper: english stop word
 Models were tested with both stemmed and unstemmed texts. Also, keyword extraction was used as a step for some word embedding models (to alleviate problem of averaging larege documents). Keyword extraction was performed using gensim's \citep{rehurek_lrec} textrank model.
 
 \section{Models}
- 
+
 \begin{enumerate}
+
+  \item Baseline - relevance ranking using Okapi BM25 \citep{bm25_impro} model.
   \item Classification on BM25 features and tf-idf features \citep{DBLP:journals/corr/abs-1904-08861}
-  \item Classification on using GloVe \citep{Pennington14glove:global} and FastText \citep{bojanowski2016enriching}  word embeddings 
+  
+  Bag of words features are used for classification with logistic regression. It is trained on first $k$ (positive) and last $k$ (negative) documents retrieved using BM25. Classifier probability scores $p_i$ and BM25 relevance $r_i$ are then weighted and documents are ranked using $r_i' = \alpha p_i + (1 - \alpha) r_i$
+  \item Classification on using GloVe \citep{Pennington14glove:global} and FastText \citep{bojanowski2016enriching}  word embeddings
+  
+  Classification is performed as in step 1, but using word embedding features. These are averaged embeddings for words from used column.
+  
   \item Scoring using similarity based on unsupervised representation (using Nonnegative Matrix Factorization)
-  \item Query expansion using nearest words using word embeddings.
+  
+  NMF is trained on whole documents corpus, and new relevance is defined as $r_i' = \alpha s_i + (1 - \alpha) r_i$ Where $s_i = S(v_{q_i}, v_{d_i})$ Where $v_{t}$ is NMF features for text $t$, and $S$ denotes cosine similarity.
+  
+  \item Query expansion using nearest neighbor word embeddings.
   
 Models 1-3 work by combining their score with relevance score. BM25 model is first used to retrieve 100 top documents. Model score results from running classification: top $k$ are defined as positive and bottom $k$ documents are defined as negative.
   
 \end{enumerate}
 
 \section{Results}
-\begin{figure}[h!]
-\centering
-\includegraphics[scale=0.5]{images/results.png}
-\label{fig:universe}
-\end{figure}
+
+
+\begin{tabular}{l*{8}{c}}
+& method & MAP & P@5 & P@10 & P@20 & NDCG@5 & NDCG@10 & NDCG@20 \\
+\hline
+1. & baseline & 0.1985 & 0.322 & 0.238 & \textbf{0.172} & 0.4249 & 0.3861 & 0.39477\\
+2. & classifier retriever & 0.1989 & 0.328 & 0.24 & 0.17 & \textbf{0.4308} & 0.3888 & \textbf{0.395} \\
+3. & word embedding retriever & \textbf{0.2064} & \textbf{0.33} & \textbf{0.242} & 0.166 & 0.433 & \textbf{0.3946} & 0.394\\
+4. & unsupervised retriever & 0.1782 & 0.29 & 0.206 & 0.1555 & 0.3905 & 0.3487 & 0.3612\\
+5. & query expander & 0.0968 & 0.14 & 0.126 & 0.096 & 0.1951 & 0.1971 & 0.2138\\
+
+\hline
+\end{tabular}
+
+\subsection{Best hyperparameters}
+Following hyperparameters were used (1 and 5 do not have hyperparameters). Text denotes whether method used text, 10 keywords extracted with TextRank or stemmed text. n\_used\_documents means that top $n$ and bottom $n$ documents were used for classification. 
+
+2. Uses $\alpha = 0.3$, text = keywords,  n\_used\_documents=20 \\
+
+3. $\alpha = 0.4$, text = keywords \\ 
+
+4. $\alpha = 0.1$, text = stemmed text, n\_components = 100 \\
 
 
 \section{Deliverables}
 
-Project's code can be found on its GitHub page\footnote{\href{https://github.com/lambdaofgod/wikir_text_mining}{https://github.com/lambdaofgod/wikir_text_mining}}.
+Project's code can be found on its GitHub page\footnote{\href{https://github.com/lambdaofgod/wikir_text_mining}{https://github.com/lambdaofgod/wikir\_text\_mining}}. For experiment management guild.ai\footnote{\href{https://github.com/guildai/guildai}{https://github.com/guildai/guildai}} tool was used. Project provides \texttt{Retriever} class that wraps ranking models giving different methods common interface.
 
 \section{Conclusion}
-BM25 already provides strong baseline for search results ranking. The difference noted in Lin's paper (metod beating BM25 by 2\% MAP) doesn't happen for WikIR, most likely because of the fact that WikIR queries are very short so retrieval is almost 'all or nothing'. It remains an open question whether the results can be improved by using simple machine learning models on top of features extracted using pretrained language models.
+BM25 already provides strong baseline for search results ranking. The difference noted in Lin's paper \citep{DBLP:journals/corr/abs-1904-08861} (linear classifier on bag-of-words features beating BM25 by 2\% MAP) does not happen for WikIR, most likely because of the fact that WikIR queries are very short. It remains an open question whether the results can be improved by using simple machine learning models on top of features extracted using deep learning models.
 
 \section{Further steps}
 \begin{itemize}
-    \item use word embedding features for global search - there are methods for building large scale approximate kNNs. These might alleviate query vocabulary mismatch problem.
-    \item use language-model based features
-    \item use Learning to Rank approach
-    \item use dataset construction method on another source
+    \item \textbf{use Learning to Rank approach} - this is intuitively next step after approach that uses classifiers. For example several gradient boosting libraries support ranking models.
+    \item \textbf{use word embedding features for global search} - there are methods for building large scale approximate kNNs. These might alleviate query vocabulary mismatch problem.
+    \item \textbf{use language-model based features} - recent neural network models in NLP, like Transformers or UMLFiT can be used for extracting document features. These work better than averaging word embeddings.
+    \item \textbf{use dataset construction method on another source}
 \end{itemize}
 
 \bibliographystyle{plain}
